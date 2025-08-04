@@ -40,3 +40,8 @@ def add_odds_features(df):
     else:
         df['line_movement'] = 0
     return df
+
+df = add_rolling_stats(df)
+df = add_travel_rest_features(df)
+#df = add_sentiment(df, text_col='tweet_text')  # only once tweet data is merged
+df = add_odds_features(df)
