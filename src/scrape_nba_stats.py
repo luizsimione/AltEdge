@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 
-NBA_API_BASE = 'https://www.balldontlie.io/api/v1/'
+NBA_API_BASE = 'https://nba.balldontlie.io/v1'
 
 def get_player_game_stats(player_id, start_date, end_date):
     stats = []
@@ -26,16 +26,28 @@ def get_player_game_stats(player_id, start_date, end_date):
     return pd.json_normalize(stats)
 
 def search_players_by_name(name):
+    url = f"{NBA_API_BASE}/players"
     resp = requests.get(
-        f"{NBA_API_BASE}/players",
-        params={'search': name}
+        url,
+        params={
+            'search': name,
+        }
     )
-    return pd.json_normalize(resp.json()['data'])
+
+    if resp.status_code != 200:
+        print(f"Request failed:", resp.status_code, resp.text)
+        return None
+    
+    try:
+        return pd.json_normalize(resp.json()['data'])
+    except Exception as e:
+        print("Failed to decode JSON:", e)
+        return None
 
 players = search_players_by_name('LeBron James')
 lebron_id = players.iloc[0]['id']
 
 df = get_player_game_stats(lebron_id, "2023-01-01", "2025-01-01")
 
-os.makedirs('data/raw', exist_ok=True)
-df.to_csv('data/raw/lebron_game_stats.csv', index=False)
+os.makedirs('Data/raw', exist_ok=True)
+df.to_csv('Data/raw/lebron_game_stats.csv', index=False)
