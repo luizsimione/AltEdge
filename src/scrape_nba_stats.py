@@ -2,7 +2,15 @@ import requests
 import pandas as pd
 import os
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from bs4 import BeautifulSoup
+import html
+import json
 
+load_dotenv()
+
+NBA_API_KEY = os.getenv("NBA_API_KEY")
+Headers = {"Authorization": NBA_API_KEY}
 NBA_API_BASE = 'https://nba.balldontlie.io/v1'
 
 def get_player_game_stats(player_id, start_date, end_date):
@@ -46,29 +54,45 @@ def search_players_by_name(name):
     
 def get_all_players():
     players = []
-    page = 1
+    cursor = None
 
     while True:
-        resp = requests.get(
-            f"{NBA_API_BASE}/players",
-            params={'page': page, 'per_page': 100}
-        )
-        data = resp.json()
-        players.extend(data['data'])
+        params = {'per_page': 100}
+        if cursor:
+            params['cursor'] = cursor
 
-        if data['meta']['next_page'] is None:
+        response = requests.get(f"{NBA_API_BASE}/players", params=params, headers=Headers)
+
+        print(f"Status Code: {response.status_code}")
+                # Try cleaning HTML if JSON decoding fails
+        if response.status_code != 200:
+            # Clean out any HTML tags (e.g., <span>) if present
+            soup = BeautifulSoup(response.text, "html.parser")
+            cleaned_text = soup.get_text()
+            print(f"Cleaned response:\n{cleaned_text}")
             break
-        page += 1
+
+        try:
+            data = response.json()
+        except ValueError:
+            # Fallback: attempt to clean and re-parse
+            soup = BeautifulSoup(response.text, "html.parser")
+            cleaned_text = soup.get_text()
+            print("Original response could not be parsed as JSON. Cleaned text:")
+            print(cleaned_text)
+            data = json.loads(cleaned_text)
+
+        players.extend(data['data'])
+        
+        cursor = data['meta'].get('next_cursor')
+        if not cursor:
+            break
 
     return pd.json_normalize(players)
 
 if __name__ == "__main__":
-    # Get all players and filter out active ones
-    all_players_df = get_all_players()
-    active_players_df = all_players_df[all_players_df['team.full_name'].notna()].copy()
+    df = get_all_players()
+    print(f"Fetched {len(df)} players")
 
-    player_stats = []
-
-    #loop through player and fetch game stats
-    for idx, row in active_players.iterrows():
-        player_id = row
+    os.makedirs('Data/raw', exist_ok=True)
+    df.to_csv('Data/raw/all_players.csv', index=False)
