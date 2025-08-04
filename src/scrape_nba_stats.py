@@ -43,11 +43,32 @@ def search_players_by_name(name):
     except Exception as e:
         print("Failed to decode JSON:", e)
         return None
+    
+def get_all_players():
+    players = []
+    page = 1
 
-players = search_players_by_name('LeBron James')
-lebron_id = players.iloc[0]['id']
+    while True:
+        resp = requests.get(
+            f"{NBA_API_BASE}/players",
+            params={'page': page, 'per_page': 100}
+        )
+        data = resp.json()
+        players.extend(data['data'])
 
-df = get_player_game_stats(lebron_id, "2023-01-01", "2025-01-01")
+        if data['meta']['next_page'] is None:
+            break
+        page += 1
 
-os.makedirs('Data/raw', exist_ok=True)
-df.to_csv('Data/raw/lebron_game_stats.csv', index=False)
+    return pd.json_normalize(players)
+
+if __name__ == "__main__":
+    # Get all players and filter out active ones
+    all_players_df = get_all_players()
+    active_players_df = all_players_df[all_players_df['team.full_name'].notna()].copy()
+
+    player_stats = []
+
+    #loop through player and fetch game stats
+    for idx, row in active_players.iterrows():
+        player_id = row
