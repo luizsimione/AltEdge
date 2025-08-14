@@ -53,6 +53,7 @@ def search_players_by_name(name):
         return None
     
 def get_all_players():
+    """Fetch all NBA players from the API with proper pagination and error handling."""
     players = []
     cursor = None
 
@@ -61,38 +62,137 @@ def get_all_players():
         if cursor:
             params['cursor'] = cursor
 
-        response = requests.get(f"{NBA_API_BASE}/players", params=params, headers=Headers)
+        try:
+            response = requests.get(
+                f"{NBA_API_BASE}/players",
+                params=params,
+                headers=Headers,
+                timeout=10
+            )
+        except requests.RequestException as e:
+            print(f"Request error: {e}")
+            break
 
+        # Log status for debugging
         print(f"Status Code: {response.status_code}")
-                # Try cleaning HTML if JSON decoding fails
+
         if response.status_code != 200:
-            # Clean out any HTML tags (e.g., <span>) if present
+            # Attempt to clean HTML error pages if present
             soup = BeautifulSoup(response.text, "html.parser")
             cleaned_text = soup.get_text()
+            print(f"Request failed: {response.status_code}")
             print(f"Cleaned response:\n{cleaned_text}")
             break
 
+        # Log partial raw response for debugging
+        print(f"First 300 chars of response: {response.text[:300]}")
+
         try:
             data = response.json()
-        except ValueError:
+        except json.JSONDecodeError:
             # Fallback: attempt to clean and re-parse
             soup = BeautifulSoup(response.text, "html.parser")
             cleaned_text = soup.get_text()
-            print("Original response could not be parsed as JSON. Cleaned text:")
+            print("Could not parse JSON. Cleaned text:")
             print(cleaned_text)
-            data = json.loads(cleaned_text)
+            try:
+                data = json.loads(cleaned_text)
+            except json.JSONDecodeError:
+                print("Still could not parse response. Stopping.")
+                break
 
-        players.extend(data['data'])
-        
-        cursor = data['meta'].get('next_cursor')
+        # Log how many players we got in this batch
+        batch_count = len(data.get('data', []))
+        print(f"Retrieved {batch_count} players in this batch.")
+
+        players.extend(data.get('data', []))
+
+        cursor = data.get('meta', {}).get('next_cursor')
         if not cursor:
             break
 
-    return pd.json_normalize(players)
+    # Convert to DataFrame
+    df = pd.json_normalize(players)
+
+    if isinstance(df, pd.DataFrame) and not df.empty:
+        df.columns = df.columns.map(str).str.lower().str.replace(" ", "_")
+        df = df.drop_duplicates(subset=["id"])
+        print(f"Final player count: {len(df)}")
+    else:
+        print("No player data returned")
+
+    return df
+
+
+def get_advanced_stats(start_season=2023, end_season=2024):
+    """Fetch advanced NBA stats for a given season range."""
+    all_stats = []
+    cursor = None
+
+    for season in range(start_season, end_season + 1):
+        print(f"Fetching advanced stats for season {season}...")
+        cursor = None
+
+        while True:
+            params = {
+                'per_page': 100,
+                'seasons[]': season
+            }
+            if cursor:
+                params['cursor'] = cursor
+
+            try:
+                response = requests.get(
+                    f"{NBA_API_BASE}/stats/advanced",
+                    params=params,
+                    headers=Headers,
+                    timeout=10
+                )
+            except requests.RequestException as e:
+                print(f"Request error: {e}")
+                break
+
+            if response.status_code != 200:
+                soup = BeautifulSoup(response.text, "html.parser")
+                print(f"Request failed: {response.status_code}")
+                print(soup.get_text())
+                break
+
+            try:
+                data = response.json()
+            except json.JSONDecodeError:
+                soup = BeautifulSoup(response.text, "html.parser")
+                cleaned_text = soup.get_text()
+                print("Could not parse JSON. Cleaned text:")
+                print(cleaned_text)
+                try:
+                    data = json.loads(cleaned_text)
+                except json.JSONDecodeError:
+                    print("Still could not parse. Stopping.")
+                    break
+
+            all_stats.extend(data.get('data', []))
+
+            cursor = data.get('meta', {}).get('next_cursor')
+            if not cursor:
+                break
+
+    df_stats = pd.json_normalize(all_stats)
+    df_stats.columns = df_stats.columns.str.lower().str.replace(" ", "_")
+    return df_stats
+
 
 if __name__ == "__main__":
-    df = get_all_players()
-    print(f"Fetched {len(df)} players")
-
+    # Step 1 — Players
+    df_players = get_all_players()
+    print(f"Fetched {len(df_players)} unique players.")
     os.makedirs('Data/raw', exist_ok=True)
-    df.to_csv('Data/raw/all_players.csv', index=False)
+    df_players.to_csv('Data/raw/all_players.csv', index=False)
+
+    # Step 2 — Advanced Stats
+    df_stats = get_advanced_stats(start_season=2023, end_season=2024)
+    print(f"Fetched {len(df_stats)} advanced stats records.")
+    df_stats.to_csv('Data/raw/advanced_stats.csv', index=False)
+
+    print("All data saved in Data/raw/")
+ 
