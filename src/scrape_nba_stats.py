@@ -1,67 +1,69 @@
 import requests
-import pandas as pd
-import time
+import csv
+from datetime import datetime, timedelta
+import os
 
-# List of 10 All-NBA players with their NBA.com player IDs
-# These IDs must correspond to NBA.com’s internal player IDs
-players = {
-    "Luka Doncic": 1629029,
+# ===== CONFIG =====
+ # put your key here
+PLAYERS = {
+    "Luka Doncic": 203507,
     "Joel Embiid": 203954,
-    "Giannis Antetokounmpo": 203507,
+    "Giannis Antetokounmpo": 201587,
     "Kevin Durant": 201142,
     "Jayson Tatum": 1628369,
     "Ja Morant": 1629630,
-    "Anthony Edwards": 2734395,
-    "Shai Gilgeous-Alexander": 1627783,
+    "Anthony Edwards": 39073827,
+    "Shai Gilgeous-Alexander": 1628963,
     "LeBron James": 2544,
     "Damian Lillard": 203081
 }
+START_DATE = "2025-01-01"  # adjust to season start
+END_DATE = datetime.today().strftime("%Y-%m-%d")
 
-season = "2024-25"
+OUTPUT_DIR = "Data/raw"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "all_nba_10_players_stats.csv")
+
+# ===== HELPER =====
+def daterange(start_date, end_date):
+    start = datetime.strptime(start_date, "%Y-%m-%d")
+    end = datetime.strptime(end_date, "%Y-%m-%d")
+    for n in range((end - start).days + 1):
+        yield start + timedelta(n)
+
+# ===== MAIN =====
 all_stats = []
 
-headers = {
-    "User-Agent": "Mozilla/5.0",
-    "Referer": "https://www.nba.com/"
-}
+for player_name, player_id in PLAYERS.items():
+    print(f"[INFO] Fetching stats for {player_name}")
+    for single_date in daterange(START_DATE, END_DATE):
+        date_str = single_date.strftime("%Y-%m-%d")
+        url = f"https://api.sportsdata.io/v3/nba/stats/json/PlayerGameStatsByPlayer/{date_str}/{player_id}?key={API_KEY}"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    if data:
+                        data["PlayerName"] = player_name
+                        all_stats.append(data)
+                except ValueError:
+                    continue  # skip empty/invalid JSON
+            elif response.status_code in [403, 404]:
+                # skip forbidden or no-game days silently
+                continue
+            else:
+                print(f"[ERROR] {player_name} {date_str} status: {response.status_code}")
+        except requests.RequestException as e:
+            print(f"[ERROR] Request failed for {player_name} on {date_str}: {e}")
 
-for name, player_id in players.items():
-    print(f"[INFO] Fetching stats for {name}")
-    url = f"https://data.nba.com/data/v2015/json/mobile_teams/nba/{season}/players/player_{player_id}_gamelog.json"
-    
-    try:
-        response = requests.get(url, headers=headers)
-        if response.status_code != 200:
-            print(f"[ERROR] Failed to fetch {name}: {response.status_code}")
-            continue
-        
-        data = response.json()
-        # Extract games — structure may vary slightly, adapt as needed
-        games = data.get("g", [])
-        for game in games:
-            stats = {
-                "player": name,
-                "game_date": game.get("gd"),
-                "opponent": game.get("opp"),
-                "pts": game.get("pts"),
-                "reb": game.get("reb"),
-                "ast": game.get("ast"),
-                "fgm": game.get("fgm"),
-                "fga": game.get("fga"),
-                "3pm": game.get("tpm"),
-                "3pa": game.get("tpa"),
-                "stl": game.get("stl"),
-                "blk": game.get("blk"),
-                "turnovers": game.get("to"),
-                "minutes": game.get("min")
-            }
-            all_stats.append(stats)
-        
-        time.sleep(1)  # be polite to NBA.com
-    except Exception as e:
-        print(f"[ERROR] Exception fetching {name}: {e}")
-
-# Save all stats to CSV
-df = pd.DataFrame(all_stats)
-df.to_csv("all_nba_10_players_stats.csv", index=False)
-print("[INFO] Saved all stats to all_nba_10_players_stats.csv")
+if all_stats:
+    # Save CSV
+    keys = sorted(all_stats[0].keys())
+    with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=keys)
+        writer.writeheader()
+        writer.writerows(all_stats)
+    print(f"[INFO] Saved all stats to {OUTPUT_FILE}")
+else:
+    print("[WARNING] No stats to save!")
