@@ -1,10 +1,18 @@
 import requests
 import csv
-from datetime import datetime, timedelta
 import os
+from dotenv import load_dotenv
+
+# ===== LOAD ENV =====
+load_dotenv()
+API_KEY = os.getenv("SPORTSDATA_API_KEY")
+if not API_KEY:
+    raise ValueError("API_KEY not found in .env file")
 
 # ===== CONFIG =====
- # put your key here
+OUTPUT_DIR = "Data/raw"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
 PLAYERS = {
     "Luka Doncic": 203507,
     "Joel Embiid": 203954,
@@ -17,53 +25,90 @@ PLAYERS = {
     "LeBron James": 2544,
     "Damian Lillard": 203081
 }
-START_DATE = "2025-01-01"  # adjust to season start
-END_DATE = datetime.today().strftime("%Y-%m-%d")
 
-OUTPUT_DIR = "Data/raw"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "all_nba_10_players_stats.csv")
+SEASON = 2024  # Change to the season you want
 
-# ===== HELPER =====
-def daterange(start_date, end_date):
-    start = datetime.strptime(start_date, "%Y-%m-%d")
-    end = datetime.strptime(end_date, "%Y-%m-%d")
-    for n in range((end - start).days + 1):
-        yield start + timedelta(n)
-
-# ===== MAIN =====
-all_stats = []
-
+# ===== FETCH DATA =====
 for player_name, player_id in PLAYERS.items():
     print(f"[INFO] Fetching stats for {player_name}")
-    for single_date in daterange(START_DATE, END_DATE):
-        date_str = single_date.strftime("%Y-%m-%d")
-        url = f"https://api.sportsdata.io/v3/nba/stats/json/PlayerGameStatsByPlayer/{date_str}/{player_id}?key={API_KEY}"
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    if data:
-                        data["PlayerName"] = player_name
-                        all_stats.append(data)
-                except ValueError:
-                    continue  # skip empty/invalid JSON
-            elif response.status_code in [403, 404]:
-                # skip forbidden or no-game days silently
-                continue
-            else:
-                print(f"[ERROR] {player_name} {date_str} status: {response.status_code}")
-        except requests.RequestException as e:
-            print(f"[ERROR] Request failed for {player_name} on {date_str}: {e}")
+    url = f"https://api.sportsdata.io/v3/nba/stats/json/PlayerSeasonStats/{SEASON}/{player_id}?key={API_KEY}"
 
-if all_stats:
-    # Save CSV
-    keys = sorted(all_stats[0].keys())
-    with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=keys)
-        writer.writeheader()
-        writer.writerows(all_stats)
-    print(f"[INFO] Saved all stats to {OUTPUT_FILE}")
-else:
-    print("[WARNING] No stats to save!")
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            if not data:
+                print(f"[WARNING] No data found for {player_name}")
+                continue
+
+            # Add player name to each game entry
+            for game in data:
+                game["PlayerName"] = player_name
+
+            # Save CSV per player
+            output_file = os.path.join(OUTPUT_DIR, f"{player_name.replace(' ', '_')}_stats.csv")
+            keys = sorted(data[0].keys())
+            with open(output_file, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=keys)
+                writer.writeheader()
+                writer.writerows(data)
+
+            print(f"[INFO] Saved stats for {player_name} to {output_file}")
+        else:
+            print(f"[ERROR] {player_name} status: {response.status_code}")
+
+    except requests.RequestException as e:
+        print(f"[ERROR] Request failed for {player_name}: {e}")
+#
+
+
+# ===== CONFIG =====
+PLAYER_NAME = "Luka Doncic"
+OUTPUT_DIR = "data/raw"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "luka_doncic_one_game.csv")
+
+# Luka Doncic 2023-24 game log
+URL = "https://www.basketball-reference.com/players/d/doncilu01/gamelog/2024"
+
+# ===== SCRAPE =====
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/116.0.0.0 Safari/537.36"
+}
+
+response = requests.get(URL, headers=headers)
+if response.status_code != 200:
+    raise Exception(f"Failed to fetch page: {response.status_code}")
+
+soup = BeautifulSoup(response.content, "html.parser")
+
+# Basketball-Reference sometimes puts tables inside comments
+import re
+comments = soup.find_all(string=lambda text: isinstance(text, str) and "<table" in text)
+table_html = None
+
+for c in comments:
+    if "id=\"pgl_basic\"" in c:
+        table_html = c
+        break
+
+if table_html is None:
+    raise Exception("Could not find game log table.")
+
+table_soup = BeautifulSoup(table_html, "html.parser")
+table = table_soup.find("table", id="pgl_basic")
+
+df = pd.read_html(str(table))[0]
+
+# Drop repeated headers
+df = df[df['G'] != 'G']
+
+# Take first game only
+first_game = df.iloc[0:1]
+
+# Save CSV
+first_game.to_csv(OUTPUT_FILE, index=False)
+print(f"[INFO] Saved one game for {PLAYER_NAME} to {OUTPUT_FILE}")
+
