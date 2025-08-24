@@ -1,12 +1,12 @@
 # AltEdge: Revolutionizing Sports Betting with Alternative Data
 
-Welcome to **AltEdge**, an innovative project designed to empower sports betting enthusiasts and data scientists with cutting-edge alternative data. This repository provides tools and datasets to uncover hidden insights and gain a competitive edge in sports betting.
+Welcome to **AltEdge**, A project I started as way to further learn and improve my data science and Machine Learning skills. This project combines my interests for sports and making models, the goal is to create a ML model that uses tradtional and alternative data to have an edge for NBA Sports Betting.
 
 ---
 
 ## 🌟 Project Overview
 
-AltEdge harnesses the power of alternative data to transform how you approach sports betting. By leveraging unconventional data sources, we aim to provide unique insights that go beyond traditional statistics, enabling smarter and more informed betting decisions.
+AltEdge harnesses the power of alternative data to transform how you approach sports betting. By leveraging unconventional data sources, I aim to provide unique insights that go beyond traditional statistics, enabling smarter and more informed betting decisions.
 
 ### Key Features
 - **Alternative Data Sources**: Access unique datasets not typically used in sports betting, such as player sentiment, social media trends, and more.
