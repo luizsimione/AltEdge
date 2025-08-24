@@ -74,8 +74,8 @@ def train_and_eval(time_df, feature_cols, target_col):
     model, predictions DF, residual std from train.
     """
     n = len(time_df)
-    if n < 25:
-        raise ValueError(f"Not enough rows after feature building for target '{target_col}' (need ≥ 25, have {n}).")
+    if n < 15:
+        raise ValueError(f"Not enough rows after feature building for target '{target_col}' (need ≥ 15, have {n}).")
 
     split_idx = int(n * 0.8)
     train_df = time_df.iloc[:split_idx].copy()
@@ -134,15 +134,18 @@ def main(args):
         print(f"[ERROR] CSV not found: {args.csv}")
         sys.exit(1)
 
+    
+
     df_raw = pd.read_csv(args.csv)
     print(f"[INFO] Loaded CSV with shape: {df_raw.shape}")
+    
 
     # Robust column discovery
     global date_col_global
     date_col_global = find_col(df_raw, ["GameDate", "Date", "GAME_DATE", "game_date"])
     pts_col = find_col(df_raw, ["Points", "PTS", "points", "Pts"])
     ast_col = find_col(df_raw, ["Assists", "AST", "assists"])
-    reb_col = find_col(df_raw, ["Rebounds", "REB", "TotalRebounds", "total_rebounds"])
+    reb_col = find_col(df_raw, ["TRB", "Rebounds", "REB", "TotalRebounds", "total_rebounds"])
 
     missing = [name for name, col in [
         ("date", date_col_global), ("points", pts_col), ("assists", ast_col), ("rebounds", reb_col)

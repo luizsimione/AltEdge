@@ -1,0 +1,26 @@
+Player: Player
+CSV: Data/raw/Shai Stats - Sheet1.csv
+Rows used (post-feature): 22
+Features used (24): days_rest, game_no, Points_lag1, Points_lag2, Points_roll3, Points_roll5, Points_roll10, Points_std5, Points_std10, Assists_lag1, Assists_lag2, Assists_roll3, Assists_roll5, Assists_roll10, Assists_std5, Assists_std10, Rebounds_lag1, Rebounds_lag2, Rebounds_roll3, Rebounds_roll5, Rebounds_roll10, Rebounds_std5, Rebounds_std10, form3
+
+=== Points ===
+Train MAE: 2.107
+Test  MAE: 4.719
+Train Residual STD: 2.880
+N train: 17, N test: 5
+Line used: 29.5
+
+=== Assists ===
+Train MAE: 0.856
+Test  MAE: 1.208
+Train Residual STD: 1.068
+N train: 17, N test: 5
+Line used: 5.5
+
+=== Rebounds ===
+Train MAE: 0.798
+Test  MAE: 1.963
+Train Residual STD: 0.977
+N train: 17, N test: 5
+Line used: 5.5
+
